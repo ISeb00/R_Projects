@@ -1,0 +1,349 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+
+---
+R Project Pt. 2 Work
+---
+```{r}
+install.packages("picante", dependencies = TRUE)
+```
+
+```{r}
+library(picante)
+```
+Community Data
+```{r}
+comm=read.csv("grassland_data/grassland.community.csv", header = TRUE, row.names = 1)
+comm
+```
+
+```{r}
+class(comm)
+```
+
+```{r}
+dim(comm)
+```
+
+```{r}
+rownames(comm)
+```
+
+```{r}
+head(colnames(comm))
+```
+Look at the first five rows and columns.
+```{r}
+comm[1:5, 1:5]
+```
+Check total abundance in each sample
+```{r}
+apply(comm, 1, sum)
+```
+Convert absolute abundance to relative abundance.
+```{r}
+comm=decostand(comm, method = "total")
+apply(comm, 1, sum)
+```
+
+```{r}
+comm[1:5, 1:5]
+```
+Trait Data
+Plot pairs of traits against each other.
+```{r}
+traits=read.csv("grassland_data/species.traits.csv", header = TRUE, row.names = 1)
+head(traits)
+pairs(traits)
+```
+
+```{r}
+traits=log10(traits)
+pairs(traits)
+```
+Metadata
+```{r}
+metadata=read.csv("grassland_data/plot.metadata.csv", header = TRUE, row.names = 1)
+head(metadata)
+```
+Phylogeny
+```{r}
+phy=read.tree("grassland_data/grassland.phylogeny.newick")
+class(phy)
+phy
+```
+List the elements of the phylogeny.
+```{r}
+names(phy)
+```
+List the first five tip labels.
+```{r}
+phy$tip.label[1:5]
+```
+List total number of tips.
+```{r}
+Ntip(phy)
+```
+Plot the phylogenetic tree, adjusting label size with ces.
+```{r}
+plot(phy, cex = 0.5)
+```
+Cleaning and Matching Data Sets
+Use match to check for mismatches/missing species or trait data and generate a new tree of the matched data. Then use all.equal to check if community and metadata are in the same order.
+```{r}
+combined=match.phylo.comm(phy, comm)
+phy=combined$phy
+comm=combined$comm
+combined=match.phylo.data(phy, traits)
+phy=combined$phy
+traits=combined$data
+all.equal(rownames(comm), rownames(metadata))
+```
+Community Biodiversity Data
+```{r}
+boxplot(specnumber(comm) ~ metadata$rel.moisture, ylab = "# of species")
+```
+One-way ANOVA compares whether data is statistically identical or not. A low p-value of less than 0.05 indicates the two compared groups have significantly different means. This data has a pvalue of 0.00346, which is less than 0.05, and indicates that two or more groups have significantly different means.
+```{r}
+#t.test(specnumber(comm) ~ metadata$habitat)
+alt=aov(specnumber(comm) ~ metadata$rel.moisture)
+summary(alt)
+```
+
+```{r}
+plot(specaccum(comm), xlab = "# of samples", ylab = "# of species")
+```
+Multivariate Community Analysis
+---
+Hierarchical Clustering
+We use Bray-Curtis dissimilarity to cluster communities in terms of their species composition. The dendrogram gives us an idea of community composition. In this data, we can see clear clustering based on habitat.
+```{r}
+comm.bc.dist=vegdist(comm, method = "bray")
+comm.bc.clust=hclust(comm.bc.dist, method = "average")
+plot(comm.bc.clust, ylab = "Bray-Curtis dissimilarity")
+```
+Ordination
+Allows us to visualize multidimensional data in a lower dimensional space. metaMDS attempts to find the best way to cluster the data, and reports on the fit using stress values. Stress values below 0.05 are considered to indicate a good fit, while values equal to or below 0.1 are fair. Most of the values below appear to indicate fair fits.
+```{r}
+comm.bc.mds=metaMDS(comm, dist = "bray")
+```
+Visual representation of the stress values and how well the NMDS fits the original data. The following are different ways to visualize the ordinance data.
+```{r}
+stressplot(comm.bc.mds)
+```
+
+```{r}
+ordiplot(comm.bc.mds, display = "sites", type = "text")
+```
+
+```{r}
+ordipointlabel(comm.bc.mds)
+```
+Another representation of the ordinance test. We see our data clustered with connections between the groups, along with confidence elipses. In this plot, we see that the communities of relative moisture 1 and 3 are relatively well sequestered, but those of relative moisture 2 are found more widely, and thus may be more similar to 1 and 3 than 1 and 3 are to each other.
+```{r}
+mds.fig=ordiplot(comm.bc.mds, type = "none")
+points(mds.fig, "sites", pch = 19, col = "green", select = metadata$rel.moisture == 
+    "1")
+points(mds.fig, "sites", pch = 19, col = "red", select = metadata$rel.moisture == 
+    "2")
+points(mds.fig, "sites", pch = 19, col = "blue", select = metadata$rel.moisture == 
+    "3")
+ordiellipse(comm.bc.mds, metadata$rel.moisture, conf = 0.95, label = TRUE)
+ordicluster(comm.bc.mds, comm.bc.clust, col = "gray")
+```
+Ordisurf for this data demonstrates the NMDS clustering to represent species abundance.
+```{r}
+ordisurf(comm.bc.mds, comm[, "Sphaeralcea_coccinea"], bubble = TRUE, main = "Sphaeralcea coccinea abundance", 
+    cex = 3)
+```
+Ordinations with Environment and Trait Data
+Here we can visualize how environmental traits overlay onto the community clustering. In this case, we can see how the communities cluster according to increasing relative moisture.
+```{r}
+ordiplot(comm.bc.mds)
+plot(envfit(comm.bc.mds, metadata[, 3:6]))
+```
+Trait Evolution
+---
+Phylogenetic Signal
+Here, analysis is determining how phylogeny might play a role in determining ecological similarity. What this will determine is whether the evolution is random, or if phylogeny can predict ecological similarity. A p test for the statistical significance of the signal is also conducted. In this data, we see a few data points with low p-values, and K stats inching closer to 1 than 0, which indicates a leaning away from a more random evolutionary model.
+```{r}
+apply(traits, 2, Kcalc, phy)
+```
+
+```{r}
+multiPhylosignal(traits, multi2di(phy))
+```
+Visualizing Trait Evolution
+This analysis allows us to visualize the trait evolution. In this case we see signals for leaf area in reference to phylogeny.
+```{r}
+plot(phy, direction = "up", show.tip.label = FALSE, show.node.label = TRUE, 
+    cex = 0.7)
+tiplabels(pch = 19, col = "black", cex = 3 * (traits[, "LeafArea"]/max(traits[, 
+    "LeafArea"])))
+```
+Analysis of Trait Relationships
+In an effort to determine whether our data are independent, as is often assumed in analyses, we can run a few tests to see how phylogeny affects this assumption. We perform two GLS tests, on taking into account phylogeny, and we can see that that the relationship between the values is not significant without taking into account the phylogenetic signal.
+```{r}
+root.gls=gls(RootTissueDens ~ SRL, data = traits)
+anova(root.gls)
+```
+
+```{r}
+root.pgls=gls(RootTissueDens ~ SRL, correlation = corBrownian(value = 1, 
+    phy), data = traits)
+anova(root.pgls)
+```
+
+```{r}
+plot(RootTissueDens ~ SRL, data = traits, xlab = "SRL (specific root length)", 
+    ylab = "Root tissue density")
+
+abline(coef(root.gls), lwd = 2, col = "black")
+abline(coef(root.pgls), lwd = 2, col = "red")
+legend("bottomleft", legend = c("GLS fit", "Phylogenetic GLS fit"), lwd = 2, 
+    col = c("black", "red"))
+```
+Phylogenetic Diversity
+In these analyses, we test for phylogenetic diversity using Faith's index, which also generates a species richness value. We see statistically significant higher phylogenetic diversity in relatively moister environments.
+```{r}
+comm.pd=pd(comm, phy)
+head(comm.pd)
+```
+
+```{r}
+boxplot(comm.pd$PD ~ metadata$rel.moisture, xlab = "Relative Moisture", ylab = "Faith's PD")
+```
+
+```{r}
+#t.test(comm.pd$PD ~ metadata$habitat)
+alt2=aov(comm.pd$PD ~ metadata$rel.moisture)
+summary(alt2)
+```
+
+```{r}
+plot(comm.pd$PD ~ comm.pd$SR, xlab = "Species richness", ylab = "Faith's PD")
+```
+(SES)MPD and MNTD
+Another way of looking into phylogenetic relatedness involves finding the Mean Pariwise Distance between species within a community, or the Mean Nearest Taxon Distance. Positive SES values and high quantiles indicate evenness, while negative SES and low quantiles demonstrate clustering. We can compare the MPD and MNTD values between different realtive moisture values and determine whther the evenness or clustering is statistically significant. But there do not seem to be statistcailly significant differences in the evenness or clustering between different relative moisture values.
+```{r}
+phy.dist=cophenetic(phy)
+comm.sesmpd=ses.mpd(comm, phy.dist, null.model = "richness", abundance.weighted = FALSE, 
+    runs = 999)
+head(comm.sesmpd)
+```
+
+```{r}
+comm.sesmntd=ses.mntd(comm, phy.dist, null.model = "richness", abundance.weighted = FALSE, 
+    runs = 999)
+head(comm.sesmntd)
+```
+
+```{r}
+plot(comm.sesmpd$mpd.obs.z ~ metadata$rel.moisture, xlab = "Relative Moisture", ylab = "SES(MPD)")
+abline(h = 0, col = "gray")
+```
+
+```{r}
+#t.test(comm.sesmpd$mpd.obs.z ~ metadata$habitat)
+alt3=aov(comm.sesmpd$mpd.obs.z ~ metadata$rel.moisture)
+summary(alt3)
+```
+
+```{r}
+plot(comm.sesmntd$mntd.obs.z ~ metadata$rel.moisture, xlab = "Relative Moisture", ylab = "SES(MNTD)")
+abline(h = 0, col = "gray")
+```
+
+```{r}
+#t.test(comm.sesmntd$mntd.obs.z ~ metadata$habitat)
+alt4=aov(comm.sesmntd$mntd.obs.z ~ metadata$rel.moisture)
+summary(alt4)
+```
+However, if we make phylogenetic trees based on habitat, we can see more evenness in fescue habitats, and more clustering in mixed grass habitats.
+```{r}
+plot(phy, show.tip.label = FALSE, main = "Fescue community fes-K-11")
+tiplabels(tip = which(phy$tip.label %in% colnames(comm)[comm["fes-K-11", ] > 
+    0]), pch = 19)
+```
+
+```{r}
+plot(phy, show.tip.label = FALSE, main = "Fescue community mix-H-23")
+tiplabels(tip = which(phy$tip.label %in% colnames(comm)[comm["mix-H-23", ] > 
+    0]), pch = 19)
+```
+Trait Diversity
+As with phylogeny, we can test trait diversity and determine clustering or evenness of traits in communities. Most traits have a negative SES value, indicating trait clustering across the different relative moisture values.
+```{r}
+trait.dist=as.matrix(dist(scale(traits), method = "euclidean"))
+comm.sesmpd.traits=ses.mpd(comm, trait.dist, null.model = "richness", abundance.weighted = FALSE, 
+    runs = 999)
+plot(comm.sesmpd.traits$mpd.obs.z ~ metadata$rel.moisture, xlab = "Relative Moisture", ylab = "Trait SES(MPD)")
+abline(h = 0, col = "gray")
+```
+Phylogenetic B-Diversity
+Here we are using the Mantel test to determine the significance of relatedness among communities, so we can compare similar species found in different communities.
+```{r}
+comm.mntd.dist=comdistnt(comm, phy.dist, abundance.weighted = TRUE)
+comm.mntd.traits.dist=comdistnt(comm, trait.dist, abundance.weighted = TRUE)
+mantel(comm.bc.dist, comm.mntd.dist)
+```
+
+```{r}
+mantel(comm.bc.dist, comm.mntd.traits.dist)
+```
+Phylogenetic/Trait-based Ordinations
+We can create simpler visual means of comparing communities based on their trait and phyolgeny diversity. It seems, among the relative moisture values, there is significant overlap, suggesting the phylogeny, traits, and species are pretty similar.
+```{r}
+comm.mntd.mds=monoMDS(comm.mntd.dist)
+mds.fig=ordiplot(comm.mntd.mds, type = "none")
+points(mds.fig, "sites", pch = 19, col = "green", select = metadata$rel.moisture == 
+    "1")
+points(mds.fig, "sites", pch = 19, col = "red", select = metadata$rel.moisture == 
+    "2")
+points(mds.fig, "sites", pch = 19, col = "blue", select = metadata$rel.moisture == 
+    "3")
+ordiellipse(comm.mntd.mds, metadata$rel.moisture, conf = 0.95, label = TRUE)
+```
+
+```{r}
+comm.mntd.traits.mds=monoMDS(comm.mntd.traits.dist)
+mds.fig=ordiplot(comm.mntd.traits.mds, type = "none")
+points(mds.fig, "sites", pch = 19, col = "green", select = metadata$rel.moisture == 
+    "1")
+points(mds.fig, "sites", pch = 19, col = "red", select = metadata$rel.moisture == 
+    "2")
+points(mds.fig, "sites", pch = 19, col = "blue", select = metadata$rel.moisture == 
+    "3")
+ordiellipse(comm.mntd.traits.mds, metadata$rel.moisture, conf = 0.95, label = TRUE)
+```
+Testing for Multivariate Differences
+Here we attempt to quantify how relative moisture plays a role in taxonomic, phylogenetic, and trait relationships. In this case, when lloking at the R2 values, it seems the relative moisture model plays little role in explaining variability, thus indicating that there is not significant difference between the groups, as supported by our earlier tests.
+```{r}
+adonis2(comm.bc.dist ~ rel.moisture, data = metadata)
+```
+
+```{r}
+adonis2(comm.mntd.dist ~ rel.moisture, data = metadata)
+```
+
+```{r}
+adonis2(comm.mntd.traits.dist ~ rel.moisture, data = metadata)
+```
+
