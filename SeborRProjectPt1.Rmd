@@ -1,0 +1,192 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+---
+R Project Pt. 1 Work
+---
+Part A: Univariate Statistics with R
+---
+
+Normality check (using histograms and qqnorm plots with qqline) and data transformation:
+```{r}
+d1=read.table("RTestData-1.txt", header = TRUE)
+d1
+```
+```{r}
+hist(d1$strep)
+qqnorm(d1$strep)
+qqline(d1$strep)
+```
+```{r}
+tstrep=log(d1$strep)
+hist(tstrep)
+qqnorm(tstrep)
+qqline(tstrep)
+```
+```{r}
+hist(d1$prev)
+qqnorm(d1$prev)
+qqline(d1$prev)
+```
+```{r}
+tprev=sqrt(d1$prev)
+hist(tprev)
+qqnorm(tprev)
+qqline(tprev)
+```
+```{r}
+hist(d1$lepto)
+qqnorm(d1$lepto)
+qqline(d1$lepto)
+```
+```{r}
+tlepto=sqrt(d1$lepto)
+hist(tlepto)
+qqnorm(tlepto)
+qqline(tlepto)
+```
+```{r}
+hist(d1$fuso)
+qqnorm(d1$fuso)
+qqline(d1$fuso)
+```
+```{r}
+hist(d1$veil)
+qqnorm(d1$veil)
+qqline(d1$veil)
+```
+```{r}
+tveil=sqrt(d1$veil)
+hist(tveil)
+qqnorm(tveil)
+qqline(tveil)
+```
+
+One-way ANOVA and summary and boxplots:
+One-way ANOVA determines whether there are any statistically significant differences between the means of samples. aov runs the one-way ANOVA test on the specified samples.
+```{r}
+l=aov(tlepto ~ d1$time)
+summary(l)
+boxplot(d1$time,tlepto)
+```
+
+```{r}
+s=aov(tstrep ~ d1$time)
+summary(s)
+boxplot(d1$time,tstrep)
+```
+
+Correlation tests:
+cor.test performs the Pearson correlation test on the specified data. This measures linear correlation between two samples. The calculated correlation coefficient ranges from -1 to +1, with -1 being a total negative linear correlation, +1 a total positive linear correlation, and 0 being no correlation.
+```{r}
+cor.test(tstrep,tprev)
+cor.test(tstrep,d1$fuso)
+cor.test(d1$fuso,tlepto)
+```
+
+Linear regressions:
+lm generates a linear regression model, calculating regression coefficients to generate a best fit line to the input data.
+```{r}
+lms=lm(tstrep ~ d1$deepest)
+summary(lms)
+plot(lms)
+abline(lms)
+```
+
+```{r}
+lmf=lm(d1$fuso ~ d1$deepest)
+summary(lmf)
+plot(lmf)
+abline(lmf)
+```
+
+---
+Part B: Using ggplot2
+---
+Use ggplot to make histograms, defining the dataframe to use, the variables/axes with aes, and adjusting the binwidth of the histogram using geom_histogram.
+```{r}
+library(ggplot2)
+ggplot(d1, aes(x=prev)) + geom_histogram(binwidth = 6)
+```
+Here we use geom_point instead of geom_histogram to make a scatter plot.
+```{r}
+ggplot(d1, aes(deepest, strep, colour=time)) + geom_point()
+```
+
+```{r}
+ggplot(d1, aes(deepest, fuso)) + geom_point()
+```
+And we can add in geom_smooth with the linear model method to generate a loess smooth with confidence intervals.
+```{r}
+ggplot(d1, aes(deepest, fuso)) + geom_point() + geom_smooth(method=lm)
+```
+
+---
+Part C: Vegan Analysis
+---
+```{r}
+install.packages("vegan")
+library(vegan)
+```
+
+```{r}
+d2=d1[2:6]
+d2
+```
+Use shannon to calculate alpha diversity for the specified dataset.
+```{r}
+shannon=diversity(d2)
+shannon
+```
+We can then use rowSums to get the number of individuals in each plot and min(rowSums) to rarefy data by using the smallest number of observations per sample to calculate the expected number if all sets of data had that number of observations.
+```{r}
+rd2=round(d2)
+#rd2
+spAb=rowSums(rd2)
+spAb
+raremin=min(rowSums(rd2))
+raremin
+```
+Use rarefy gives the expected rarefied number of species based on the min value above. Then use rarecurve to generate rarefaction curves of the input data.
+```{r}
+sRare=rarefy(rd2, raremin)
+sRare
+rarecurve(rd2)
+```
+Use vegdist to calculate the pairwise dissimilarity measures of our data using bray-curtis method.
+```{r}
+bray=vegdist(d2, "bray")
+bray
+hist(bray, xlim=range(0.0,1.0))
+```
+metaMDS specifies the dataframe we wish to use, the bray-curtis distance method, and prevents progress output and autotransformatin of data.
+```{r}
+d2.mds=metaMDS(comm = d2, distance = "bray", trace = FALSE, autotransform = FALSE)
+plot(d2.mds$points)
+```
+We can extract the x and y corrdinates into a new data frame and plot according to time and status.
+```{r}
+MDS_xy=data.frame(d2.mds$points)
+MDS_xy$status=d1$status
+MDS_xy$time=d1$time
+library(ggplot2)
+ggplot(MDS_xy, aes(MDS1, MDS2, color=status)) + geom_point() + theme_bw()
+ggplot(MDS_xy, aes(MDS1, MDS2, color=time)) + geom_point() + theme_bw()
+```
+
